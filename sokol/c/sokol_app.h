@@ -1564,6 +1564,8 @@ typedef struct sapp_allocator {
     _SAPP_LOGITEM_XMACRO(WIN32_WGL_OPENGL_PROFILE_NOT_SUPPORTED, "requested OpenGL profile not support by GL driver (ERROR_INVALID_PROFILE_ARB)") \
     _SAPP_LOGITEM_XMACRO(WIN32_WGL_INCOMPATIBLE_DEVICE_CONTEXT, "CreateContextAttribsARB failed with ERROR_INCOMPATIBLE_DEVICE_CONTEXTS_ARB") \
     _SAPP_LOGITEM_XMACRO(WIN32_WGL_CREATE_CONTEXT_ATTRIBS_FAILED_OTHER, "CreateContextAttribsARB failed for other reason") \
+    _SAPP_LOGITEM_XMACRO(WIN32_EGL_GET_DISPLAY_FAILED, "eglGetDisplay() failed") \
+    _SAPP_LOGITEM_XMACRO(WIN32_EGL_INITIALIZE_FAILED, "eglInitialize() failed") \
     _SAPP_LOGITEM_XMACRO(WIN32_D3D11_CREATE_DEVICE_AND_SWAPCHAIN_WITH_DEBUG_FAILED, "D3D11CreateDeviceAndSwapChain() with D3D11_CREATE_DEVICE_DEBUG failed, retrying without debug flag.") \
     _SAPP_LOGITEM_XMACRO(WIN32_D3D11_GET_IDXGIFACTORY_FAILED, "could not obtain IDXGIFactory object") \
     _SAPP_LOGITEM_XMACRO(WIN32_D3D11_GET_IDXGIADAPTER_FAILED, "could not obtain IDXGIAdapter object") \
@@ -1978,7 +1980,7 @@ inline void sapp_run(const sapp_desc& desc) { return sapp_run(&desc); }
 #elif defined(_WIN32)
     /* Windows (D3D11 or GL) */
     #define _SAPP_WIN32 (1)
-    #if !defined(SOKOL_D3D11) && !defined(SOKOL_GLCORE33)
+    #if !defined(SOKOL_D3D11) && !defined(SOKOL_GLCORE33) && !defined(SOKOL_GLES3)
     #error("sokol_app.h: unknown 3D API selected for Win32, must be SOKOL_D3D11 or SOKOL_GLCORE33")
     #endif
 #elif defined(__ANDROID__)
@@ -2123,6 +2125,9 @@ inline void sapp_run(const sapp_desc& desc) { return sapp_run(&desc); }
     #endif
     #ifndef WM_DPICHANGED
         #define WM_DPICHANGED (0x02E0)
+    #endif
+    #if defined(SOKOL_GLES3)
+        #include <EGL/egl.h>
     #endif
 #elif defined(_SAPP_ANDROID)
     #include <pthread.h>
@@ -2607,6 +2612,14 @@ typedef struct {
 } _sapp_wgl_t;
 #endif // SOKOL_GLCORE33
 
+#if defined(SOKOL_GLES3)
+typedef struct {
+    EGLDisplay display;
+    EGLContext context;
+    EGLSurface surface;
+} _sapp_egl_t;
+#endif // SOKOL_GLES3
+
 #endif // _SAPP_WIN32
 
 #if defined(_SAPP_ANDROID)
@@ -2878,6 +2891,8 @@ typedef struct {
             _sapp_d3d11_t d3d11;
         #elif defined(SOKOL_GLCORE33)
             _sapp_wgl_t wgl;
+        #elif defined(SOKOL_GLES3)
+            _sapp_egl_t egl;
         #endif
     #elif defined(_SAPP_ANDROID)
         _sapp_android_t android;
@@ -6896,6 +6911,116 @@ _SOKOL_PRIVATE void _sapp_wgl_swap_buffers(void) {
 }
 #endif /* SOKOL_GLCORE33 */
 
+#if defined(SOKOL_GLES3)
+
+_SOKOL_PRIVATE void _sapp_egl_init(void) {
+
+    if (!eglBindAPI(EGL_OPENGL_ES_API)) {
+        _SAPP_PANIC(LINUX_EGL_BIND_OPENGL_ES_API_FAILED);
+    }
+
+    _sapp.egl.display = eglGetDisplay((EGLNativeDisplayType)_sapp.win32.dc);
+    if (EGL_NO_DISPLAY == _sapp.egl.display) {
+        _SAPP_PANIC(WIN32_EGL_GET_DISPLAY_FAILED);
+    }
+
+    EGLint major, minor;
+    if (!eglInitialize(_sapp.egl.display, &major, &minor)) {
+        _SAPP_PANIC(LINUX_EGL_INITIALIZE_FAILED);
+    }
+
+    EGLint sample_count = _sapp.desc.sample_count > 1 ? _sapp.desc.sample_count : 0;
+    EGLint alpha_size = _sapp.desc.alpha ? 8 : 0;
+    const EGLint config_attrs[] = {
+        EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
+        EGL_RED_SIZE, 8,
+        EGL_GREEN_SIZE, 8,
+        EGL_BLUE_SIZE, 8,
+        EGL_ALPHA_SIZE, alpha_size,
+        EGL_DEPTH_SIZE, 24,
+        EGL_STENCIL_SIZE, 8,
+        EGL_SAMPLE_BUFFERS, _sapp.desc.sample_count > 1 ? 1 : 0,
+        EGL_SAMPLES, sample_count,
+        EGL_NONE,
+    };
+
+    EGLConfig egl_configs[32];
+    EGLint config_count;
+    if (!eglChooseConfig(_sapp.egl.display, config_attrs, egl_configs, 32, &config_count) || config_count == 0) {
+        _SAPP_PANIC(LINUX_EGL_NO_CONFIGS);
+    }
+
+    EGLConfig config = egl_configs[0];
+    for (int i = 0; i < config_count; ++i) {
+        EGLConfig c = egl_configs[i];
+        EGLint r, g, b, a, d, s, n;
+        if (eglGetConfigAttrib(_sapp.egl.display, c, EGL_RED_SIZE, &r) &&
+            eglGetConfigAttrib(_sapp.egl.display, c, EGL_GREEN_SIZE, &g) &&
+            eglGetConfigAttrib(_sapp.egl.display, c, EGL_BLUE_SIZE, &b) &&
+            eglGetConfigAttrib(_sapp.egl.display, c, EGL_ALPHA_SIZE, &a) &&
+            eglGetConfigAttrib(_sapp.egl.display, c, EGL_DEPTH_SIZE, &d) &&
+            eglGetConfigAttrib(_sapp.egl.display, c, EGL_STENCIL_SIZE, &s) &&
+            eglGetConfigAttrib(_sapp.egl.display, c, EGL_SAMPLES, &n) &&
+            (r == 8) && (g == 8) && (b == 8) && (a == alpha_size) && (d == 24) && (s == 8) && (n == sample_count)) {
+            config = c;
+            break;
+        }
+    }
+
+    EGLint visual_id;
+    if (!eglGetConfigAttrib(_sapp.egl.display, config, EGL_NATIVE_VISUAL_ID, &visual_id)) {
+        _SAPP_PANIC(LINUX_EGL_NO_NATIVE_VISUAL);
+    }
+
+    _sapp.egl.surface = eglCreateWindowSurface(_sapp.egl.display, config, (EGLNativeWindowType)_sapp.win32.hwnd, NULL);
+    if (EGL_NO_SURFACE == _sapp.egl.surface) {
+        _SAPP_PANIC(LINUX_EGL_CREATE_WINDOW_SURFACE_FAILED);
+    }
+
+    EGLint ctx_attrs[] = {
+        #if defined(SOKOL_GLCORE33)
+            EGL_CONTEXT_MAJOR_VERSION, _sapp.desc.gl_major_version,
+            EGL_CONTEXT_MINOR_VERSION, _sapp.desc.gl_minor_version,
+            EGL_CONTEXT_OPENGL_PROFILE_MASK, EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT,
+        #elif defined(SOKOL_GLES3)
+            EGL_CONTEXT_CLIENT_VERSION, 3,
+        #endif
+        EGL_NONE,
+    };
+
+    _sapp.egl.context = eglCreateContext(_sapp.egl.display, config, EGL_NO_CONTEXT, ctx_attrs);
+    if (EGL_NO_CONTEXT == _sapp.egl.context) {
+        _SAPP_PANIC(LINUX_EGL_CREATE_CONTEXT_FAILED);
+    }
+
+    if (!eglMakeCurrent(_sapp.egl.display, _sapp.egl.surface, _sapp.egl.surface, _sapp.egl.context)) {
+        _SAPP_PANIC(LINUX_EGL_MAKE_CURRENT_FAILED);
+    }
+
+    eglSwapInterval(_sapp.egl.display, _sapp.swap_interval);
+}
+
+_SOKOL_PRIVATE void _sapp_egl_destroy(void) {
+    if (_sapp.egl.display != EGL_NO_DISPLAY) {
+        eglMakeCurrent(_sapp.egl.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+
+        if (_sapp.egl.context != EGL_NO_CONTEXT) {
+            eglDestroyContext(_sapp.egl.display, _sapp.egl.context);
+            _sapp.egl.context = EGL_NO_CONTEXT;
+        }
+
+        if (_sapp.egl.surface != EGL_NO_SURFACE) {
+            eglDestroySurface(_sapp.egl.display, _sapp.egl.surface);
+            _sapp.egl.surface = EGL_NO_SURFACE;
+        }
+
+        eglTerminate(_sapp.egl.display);
+        _sapp.egl.display = EGL_NO_DISPLAY;
+    }
+}
+#endif // SOKOL_GLES3
+
 _SOKOL_PRIVATE bool _sapp_win32_wide_to_utf8(const wchar_t* src, char* dst, int dst_num_bytes) {
     SOKOL_ASSERT(src && dst && (dst_num_bytes > 1));
     _sapp_clear(dst, (size_t)dst_num_bytes);
@@ -7931,6 +8056,9 @@ _SOKOL_PRIVATE void _sapp_win32_run(const sapp_desc* desc) {
         _sapp_wgl_load_extensions();
         _sapp_wgl_create_context();
     #endif
+    #if defined(SOKOL_GLES3)
+        _sapp_egl_init();
+    #endif
     _sapp.valid = true;
 
     bool done = false;
@@ -7957,6 +8085,9 @@ _SOKOL_PRIVATE void _sapp_win32_run(const sapp_desc* desc) {
         #if defined(SOKOL_GLCORE33)
             _sapp_wgl_swap_buffers();
         #endif
+        #if defined(SOKOL_GLES3)
+            eglSwapBuffers(_sapp.egl.display, _sapp.egl.surface);
+        #endif
         /* check for window resized, this cannot happen in WM_SIZE as it explodes memory usage */
         if (_sapp_win32_update_dimensions()) {
             #if defined(SOKOL_D3D11)
@@ -7979,6 +8110,8 @@ _SOKOL_PRIVATE void _sapp_win32_run(const sapp_desc* desc) {
     #if defined(SOKOL_D3D11)
         _sapp_d3d11_destroy_default_render_target();
         _sapp_d3d11_destroy_device_and_swapchain();
+    #elif defined(SOKOL_GLES3)
+        _sapp_egl_destroy();
     #else
         _sapp_wgl_destroy_context();
         _sapp_wgl_shutdown();
@@ -11282,7 +11415,7 @@ SOKOL_API_IMPL const void* sapp_egl_get_display(void) {
     SOKOL_ASSERT(_sapp.valid);
     #if defined(_SAPP_ANDROID)
         return _sapp.android.display;
-    #elif defined(_SAPP_LINUX) && !defined(_SAPP_GLX)
+    #elif (defined(_SAPP_LINUX) && !defined(_SAPP_GLX)) || (defined (_SAPP_WIN32) && defined(SOKOL_GLES3))
         return _sapp.egl.display;
     #else
         return 0;
@@ -11293,7 +11426,7 @@ SOKOL_API_IMPL const void* sapp_egl_get_context(void) {
     SOKOL_ASSERT(_sapp.valid);
     #if defined(_SAPP_ANDROID)
         return _sapp.android.context;
-    #elif defined(_SAPP_LINUX) && !defined(_SAPP_GLX)
+    #elif (defined(_SAPP_LINUX) && !defined(_SAPP_GLX)) || (defined(_SAPP_WIN32) && defined(SOKOL_GLES3)) 
         return _sapp.egl.context;
     #else
         return 0;

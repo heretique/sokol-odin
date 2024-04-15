@@ -4336,6 +4336,8 @@ inline int sg_append_buffer(sg_buffer buf_id, const sg_range& data) { return sg_
                 #include <windows.h>
                 #define _SOKOL_USE_WIN32_GL_LOADER (1)
                 #pragma comment (lib, "kernel32")   // GetProcAddress()
+            #elif defined(SOKOL_GLES3)
+                #include <GLES3/gl3.h>
             #endif
         #elif defined(__APPLE__)
             #include <TargetConditionals.h>

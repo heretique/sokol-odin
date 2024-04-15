@@ -9,6 +9,7 @@ SOKOL_DEBUG :: #config(SOKOL_DEBUG, ODIN_DEBUG)
 
 DEBUG :: #config(SOKOL_SHAPE_DEBUG, SOKOL_DEBUG)
 USE_GL :: #config(SOKOL_USE_GL, false)
+USE_GLES :: #config(SOKOL_USE_GLES, false)
 USE_DLL :: #config(SOKOL_DLL, false)
 
 when ODIN_OS == .Windows {
@@ -16,6 +17,9 @@ when ODIN_OS == .Windows {
         when USE_GL {
             when DEBUG { foreign import sokol_shape_clib { "../sokol_dll_windows_x64_gl_debug.lib" } }
             else       { foreign import sokol_shape_clib { "../sokol_dll_windows_x64_gl_release.lib" } }
+        } else when USE_GLES {
+            when DEBUG { foreign import sokol_shape_clib { "../sokol_dll_windows_x64_gles_debug.lib" } }
+            else       { foreign import sokol_shape_clib { "../sokol_dll_windows_x64_gles_release.lib" } }
         } else {
             when DEBUG { foreign import sokol_shape_clib { "../sokol_dll_windows_x64_d3d11_debug.lib" } }
             else       { foreign import sokol_shape_clib { "../sokol_dll_windows_x64_d3d11_release.lib" } }
@@ -24,6 +28,9 @@ when ODIN_OS == .Windows {
         when USE_GL {
             when DEBUG { foreign import sokol_shape_clib { "sokol_shape_windows_x64_gl_debug.lib" } }
             else       { foreign import sokol_shape_clib { "sokol_shape_windows_x64_gl_release.lib" } }
+        } else when USE_GLES {
+            when DEBUG { foreign import sokol_shape_clib { "sokol_shape_windows_x64_gles_debug.lib" } }
+            else       { foreign import sokol_shape_clib { "sokol_shape_windows_x64_gles_release.lib" } }
         } else {
             when DEBUG { foreign import sokol_shape_clib { "sokol_shape_windows_x64_d3d11_debug.lib" } }
             else       { foreign import sokol_shape_clib { "sokol_shape_windows_x64_d3d11_release.lib" } }
