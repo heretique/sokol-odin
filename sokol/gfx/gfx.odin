@@ -36,21 +36,32 @@ when ODIN_OS == .Windows {
         }
     }
 } else when ODIN_OS == .Darwin {
-    when USE_GL {
-        when ODIN_ARCH == .arm64 {
-            when DEBUG { foreign import sokol_gfx_clib { "sokol_gfx_macos_arm64_gl_debug.a", "system:Cocoa.framework","system:QuartzCore.framework","system:OpenGL.framework" } }
-            else       { foreign import sokol_gfx_clib { "sokol_gfx_macos_arm64_gl_release.a", "system:Cocoa.framework","system:QuartzCore.framework","system:OpenGL.framework" } }
-       } else {
-            when DEBUG { foreign import sokol_gfx_clib { "sokol_gfx_macos_x64_gl_debug.a", "system:Cocoa.framework","system:QuartzCore.framework","system:OpenGL.framework" } }
-            else       { foreign import sokol_gfx_clib { "sokol_gfx_macos_x64_gl_release.a", "system:Cocoa.framework","system:QuartzCore.framework","system:OpenGL.framework" } }
-        }
+    when USE_DLL {
+             when  USE_GL && ODIN_ARCH == .arm64 &&  DEBUG { foreign import sokol_gfx_clib { "../dylib/sokol_dylib_macos_arm64_gl_debug.dylib" } }
+        else when  USE_GL && ODIN_ARCH == .arm64 && !DEBUG { foreign import sokol_gfx_clib { "../dylib/sokol_dylib_macos_arm64_gl_release.dylib" } }
+        else when  USE_GL && ODIN_ARCH == .amd64 &&  DEBUG { foreign import sokol_gfx_clib { "../dylib/sokol_dylib_macos_x64_gl_debug.dylib" } }
+        else when  USE_GL && ODIN_ARCH == .amd64 && !DEBUG { foreign import sokol_gfx_clib { "../dylib/sokol_dylib_macos_x64_gl_release.dylib" } }
+        else when !USE_GL && ODIN_ARCH == .arm64 &&  DEBUG { foreign import sokol_gfx_clib { "../dylib/sokol_dylib_macos_arm64_metal_debug.dylib" } }
+        else when !USE_GL && ODIN_ARCH == .arm64 && !DEBUG { foreign import sokol_gfx_clib { "../dylib/sokol_dylib_macos_arm64_metal_release.dylib" } }
+        else when !USE_GL && ODIN_ARCH == .amd64 &&  DEBUG { foreign import sokol_gfx_clib { "../dylib/sokol_dylib_macos_x64_metal_debug.dylib" } }
+        else when !USE_GL && ODIN_ARCH == .amd64 && !DEBUG { foreign import sokol_gfx_clib { "../dylib/sokol_dylib_macos_x64_metal_release.dylib" } }
     } else {
-        when ODIN_ARCH == .arm64 {
-            when DEBUG { foreign import sokol_gfx_clib { "sokol_gfx_macos_arm64_metal_debug.a", "system:Cocoa.framework","system:QuartzCore.framework","system:Metal.framework","system:MetalKit.framework" } }
-            else       { foreign import sokol_gfx_clib { "sokol_gfx_macos_arm64_metal_release.a", "system:Cocoa.framework","system:QuartzCore.framework","system:Metal.framework","system:MetalKit.framework" } }
+        when USE_GL {
+            when ODIN_ARCH == .arm64 {
+                when DEBUG { foreign import sokol_gfx_clib { "sokol_gfx_macos_arm64_gl_debug.a", "system:Cocoa.framework","system:QuartzCore.framework","system:OpenGL.framework" } }
+                else       { foreign import sokol_gfx_clib { "sokol_gfx_macos_arm64_gl_release.a", "system:Cocoa.framework","system:QuartzCore.framework","system:OpenGL.framework" } }
+            } else {
+                when DEBUG { foreign import sokol_gfx_clib { "sokol_gfx_macos_x64_gl_debug.a", "system:Cocoa.framework","system:QuartzCore.framework","system:OpenGL.framework" } }
+                else       { foreign import sokol_gfx_clib { "sokol_gfx_macos_x64_gl_release.a", "system:Cocoa.framework","system:QuartzCore.framework","system:OpenGL.framework" } }
+            }
         } else {
-            when DEBUG { foreign import sokol_gfx_clib { "sokol_gfx_macos_x64_metal_debug.a", "system:Cocoa.framework","system:QuartzCore.framework","system:Metal.framework","system:MetalKit.framework" } }
-            else       { foreign import sokol_gfx_clib { "sokol_gfx_macos_x64_metal_release.a", "system:Cocoa.framework","system:QuartzCore.framework","system:Metal.framework","system:MetalKit.framework" } }
+            when ODIN_ARCH == .arm64 {
+                when DEBUG { foreign import sokol_gfx_clib { "sokol_gfx_macos_arm64_metal_debug.a", "system:Cocoa.framework","system:QuartzCore.framework","system:Metal.framework","system:MetalKit.framework" } }
+                else       { foreign import sokol_gfx_clib { "sokol_gfx_macos_arm64_metal_release.a", "system:Cocoa.framework","system:QuartzCore.framework","system:Metal.framework","system:MetalKit.framework" } }
+            } else {
+                when DEBUG { foreign import sokol_gfx_clib { "sokol_gfx_macos_x64_metal_debug.a", "system:Cocoa.framework","system:QuartzCore.framework","system:Metal.framework","system:MetalKit.framework" } }
+                else       { foreign import sokol_gfx_clib { "sokol_gfx_macos_x64_metal_release.a", "system:Cocoa.framework","system:QuartzCore.framework","system:Metal.framework","system:MetalKit.framework" } }
+            }
         }
     }
 } else when ODIN_OS == .Linux {
@@ -232,6 +243,7 @@ MAX_VERTEX_BUFFERS :: 8
 MAX_SHADERSTAGE_IMAGES :: 12
 MAX_SHADERSTAGE_SAMPLERS :: 8
 MAX_SHADERSTAGE_IMAGESAMPLERPAIRS :: 12
+MAX_SHADERSTAGE_STORAGEBUFFERS :: 8
 MAX_SHADERSTAGE_UBS :: 4
 MAX_UB_MEMBERS :: 16
 MAX_VERTEX_ATTRIBUTES :: 16
@@ -246,7 +258,7 @@ Color :: struct {
 }
 
 Backend :: enum i32 {
-    GLCORE33,
+    GLCORE,
     GLES3,
     D3D11,
     METAL_IOS,
@@ -323,8 +335,10 @@ Pixel_Format :: enum i32 {
     ETC2_RGB8A1,
     ETC2_RGBA8,
     ETC2_SRGB8A8,
-    ETC2_RG11,
-    ETC2_RG11SN,
+    EAC_R11,
+    EAC_R11SN,
+    EAC_RG11,
+    EAC_RG11SN,
     ASTC_4x4_RGBA,
     ASTC_4x4_SRGBA,
 }
@@ -345,6 +359,7 @@ Features :: struct {
     image_clamp_to_border : bool,
     mrt_independent_blend_state : bool,
     mrt_independent_write_mask : bool,
+    storage_buffer : bool,
 }
 
 Limits :: struct {
@@ -377,6 +392,7 @@ Buffer_Type :: enum i32 {
     DEFAULT,
     VERTEXBUFFER,
     INDEXBUFFER,
+    STORAGEBUFFER,
 }
 
 Index_Type :: enum i32 {
@@ -667,6 +683,7 @@ Pass :: struct {
 Stage_Bindings :: struct {
     images : [12]Image,
     samplers : [8]Sampler,
+    storage_buffers : [8]Buffer,
 }
 
 Bindings :: struct {
@@ -760,6 +777,11 @@ Shader_Uniform_Block_Desc :: struct {
     uniforms : [16]Shader_Uniform_Desc,
 }
 
+Shader_Storage_Buffer_Desc :: struct {
+    used : bool,
+    readonly : bool,
+}
+
 Shader_Image_Desc :: struct {
     used : bool,
     multisampled : bool,
@@ -785,6 +807,7 @@ Shader_Stage_Desc :: struct {
     entry : cstring,
     d3d11_target : cstring,
     uniform_blocks : [4]Shader_Uniform_Block_Desc,
+    storage_buffers : [8]Shader_Storage_Buffer_Desc,
     images : [12]Shader_Image_Desc,
     samplers : [8]Shader_Sampler_Desc,
     image_sampler_pairs : [12]Shader_Image_Sampler_Pair_Desc,
@@ -1012,6 +1035,7 @@ Frame_Stats_Metal_Bindings :: struct {
     num_set_vertex_buffer : u32,
     num_set_vertex_texture : u32,
     num_set_vertex_sampler_state : u32,
+    num_set_fragment_buffer : u32,
     num_set_fragment_texture : u32,
     num_set_fragment_sampler_state : u32,
 }
@@ -1092,6 +1116,7 @@ Log_Item :: enum i32 {
     GL_FRAMEBUFFER_STATUS_INCOMPLETE_MULTISAMPLE,
     GL_FRAMEBUFFER_STATUS_UNKNOWN,
     D3D11_CREATE_BUFFER_FAILED,
+    D3D11_CREATE_BUFFER_SRV_FAILED,
     D3D11_CREATE_DEPTH_TEXTURE_UNSUPPORTED_PIXEL_FORMAT,
     D3D11_CREATE_DEPTH_TEXTURE_FAILED,
     D3D11_CREATE_2D_TEXTURE_UNSUPPORTED_PIXEL_FORMAT,
@@ -1138,6 +1163,7 @@ Log_Item :: enum i32 {
     WGPU_CREATE_SHADER_MODULE_FAILED,
     WGPU_SHADER_TOO_MANY_IMAGES,
     WGPU_SHADER_TOO_MANY_SAMPLERS,
+    WGPU_SHADER_TOO_MANY_STORAGEBUFFERS,
     WGPU_SHADER_CREATE_BINDGROUP_LAYOUT_FAILED,
     WGPU_CREATE_PIPELINE_LAYOUT_FAILED,
     WGPU_CREATE_RENDER_PIPELINE_FAILED,
@@ -1182,6 +1208,8 @@ Log_Item :: enum i32 {
     VALIDATE_BUFFERDESC_DATA,
     VALIDATE_BUFFERDESC_DATA_SIZE,
     VALIDATE_BUFFERDESC_NO_DATA,
+    VALIDATE_BUFFERDESC_STORAGEBUFFER_SUPPORTED,
+    VALIDATE_BUFFERDESC_STORAGEBUFFER_SIZE_MULTIPLE_4,
     VALIDATE_IMAGEDATA_NODATA,
     VALIDATE_IMAGEDATA_DATA_SIZE,
     VALIDATE_IMAGEDESC_CANARY,
@@ -1215,6 +1243,8 @@ Log_Item :: enum i32 {
     VALIDATE_SHADERDESC_UB_SIZE_MISMATCH,
     VALIDATE_SHADERDESC_UB_ARRAY_COUNT,
     VALIDATE_SHADERDESC_UB_STD140_ARRAY_TYPE,
+    VALIDATE_SHADERDESC_NO_CONT_STORAGEBUFFERS,
+    VALIDATE_SHADERDESC_STORAGEBUFFER_READONLY,
     VALIDATE_SHADERDESC_NO_CONT_IMAGES,
     VALIDATE_SHADERDESC_NO_CONT_SAMPLERS,
     VALIDATE_SHADERDESC_IMAGE_SAMPLER_PAIR_IMAGE_SLOT_OUT_OF_RANGE,
@@ -1228,11 +1258,10 @@ Log_Item :: enum i32 {
     VALIDATE_SHADERDESC_IMAGE_NOT_REFERENCED_BY_IMAGE_SAMPLER_PAIRS,
     VALIDATE_SHADERDESC_SAMPLER_NOT_REFERENCED_BY_IMAGE_SAMPLER_PAIRS,
     VALIDATE_SHADERDESC_NO_CONT_IMAGE_SAMPLER_PAIRS,
-    VALIDATE_SHADERDESC_ATTR_SEMANTICS,
     VALIDATE_SHADERDESC_ATTR_STRING_TOO_LONG,
     VALIDATE_PIPELINEDESC_CANARY,
     VALIDATE_PIPELINEDESC_SHADER,
-    VALIDATE_PIPELINEDESC_NO_ATTRS,
+    VALIDATE_PIPELINEDESC_NO_CONT_ATTRS,
     VALIDATE_PIPELINEDESC_LAYOUT_STRIDE4,
     VALIDATE_PIPELINEDESC_ATTR_SEMANTICS,
     VALIDATE_ATTACHMENTSDESC_CANARY,
@@ -1336,6 +1365,10 @@ Log_Item :: enum i32 {
     VALIDATE_ABND_VS_EXPECTED_NONFILTERING_SAMPLER,
     VALIDATE_ABND_VS_UNEXPECTED_SAMPLER_BINDING,
     VALIDATE_ABND_VS_SMP_EXISTS,
+    VALIDATE_ABND_VS_EXPECTED_STORAGEBUFFER_BINDING,
+    VALIDATE_ABND_VS_STORAGEBUFFER_EXISTS,
+    VALIDATE_ABND_VS_STORAGEBUFFER_BINDING_BUFFERTYPE,
+    VALIDATE_ABND_VS_UNEXPECTED_STORAGEBUFFER_BINDING,
     VALIDATE_ABND_FS_EXPECTED_IMAGE_BINDING,
     VALIDATE_ABND_FS_IMG_EXISTS,
     VALIDATE_ABND_FS_IMAGE_TYPE_MISMATCH,
@@ -1349,6 +1382,10 @@ Log_Item :: enum i32 {
     VALIDATE_ABND_FS_EXPECTED_NONFILTERING_SAMPLER,
     VALIDATE_ABND_FS_UNEXPECTED_SAMPLER_BINDING,
     VALIDATE_ABND_FS_SMP_EXISTS,
+    VALIDATE_ABND_FS_EXPECTED_STORAGEBUFFER_BINDING,
+    VALIDATE_ABND_FS_STORAGEBUFFER_EXISTS,
+    VALIDATE_ABND_FS_STORAGEBUFFER_BINDING_BUFFERTYPE,
+    VALIDATE_ABND_FS_UNEXPECTED_STORAGEBUFFER_BINDING,
     VALIDATE_AUB_NO_PIPELINE,
     VALIDATE_AUB_NO_UB_AT_SLOT,
     VALIDATE_AUB_SIZE,
